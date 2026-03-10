@@ -82,6 +82,9 @@ function main(): void {
     if (transformedStderr) {
       process.stderr.write(transformedStderr + '\n');
     }
+
+    // Preserve exit code from child process
+    process.exit(code ?? 1);
   });
 }
 

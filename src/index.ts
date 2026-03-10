@@ -2,6 +2,8 @@
 
 // fullcontext - Prevent LLMs from truncating command output
 
+import { spawn } from 'child_process';
+
 const USAGE = `fullcontext - Prevent LLMs from truncating command output
 
 Usage: fullcontext <command> [arguments...]
@@ -43,6 +45,15 @@ function main(): void {
     console.log(USAGE);
     process.exit(0);
   }
+
+  // Join all arguments into a single command string for shell execution
+  const command = args.join(' ');
+
+  // Spawn the command in a shell to support pipes, redirects, etc.
+  const child = spawn(command, {
+    shell: true,
+    stdio: ['inherit', 'pipe', 'pipe'],
+  });
 }
 
 main();

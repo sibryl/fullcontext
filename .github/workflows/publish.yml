@@ -19,7 +19,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          # Don't set registry-url - let npm CLI handle OIDC auth
+
+      - name: Upgrade npm for OIDC support
+        run: npm install -g npm@latest
+
+      - name: Check versions
+        run: |
+          node --version
+          npm --version
 
       - name: Install dependencies
         run: npm ci

@@ -2,6 +2,7 @@
   "name": "fullcontext",
   "version": "1.0.0",
   "description": "Prevent LLMs from truncating command output",
+  "author": "sibryl",
   "license": "MIT",
   "main": "dist/index.js",
   "bin": {

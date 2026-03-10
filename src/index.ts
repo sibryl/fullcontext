@@ -66,6 +66,23 @@ function main(): void {
   child.stderr?.on('data', (chunk: Buffer) => {
     stderrChunks.push(chunk);
   });
+
+  // Handle process close - transform and output
+  child.on('close', (code: number | null) => {
+    // Transform and output stdout
+    const stdout = Buffer.concat(stdoutChunks).toString();
+    const transformedStdout = transformOutput(stdout);
+    if (transformedStdout) {
+      process.stdout.write(transformedStdout + '\n');
+    }
+
+    // Transform and output stderr
+    const stderr = Buffer.concat(stderrChunks).toString();
+    const transformedStderr = transformOutput(stderr);
+    if (transformedStderr) {
+      process.stderr.write(transformedStderr + '\n');
+    }
+  });
 }
 
 main();

@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "Prevent LLMs from truncating command output",
   "license": "MIT",
+  "main": "dist/index.js",
+  "bin": {
+    "fullcontext": "dist/index.js"
+  },
   "scripts": {
     "build": "tsc"
   },

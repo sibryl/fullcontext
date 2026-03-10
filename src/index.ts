@@ -25,6 +25,11 @@ function transformOutput(output: string): string {
     lines.pop();
   }
 
+  // Handle empty output
+  if (lines.length === 0) {
+    return '';
+  }
+
   return lines.map((line, i) => `[${i + 1}] ${line}`).join(' ');
 }
 

@@ -47,6 +47,7 @@ function main(): void {
   }
 
   // Join all arguments into a single command string for shell execution
+  // This supports pipes (|), redirects (>), chains (&&), and other shell features
   const command = args.join(' ');
 
   // Spawn the command in a shell to support pipes, redirects, etc.

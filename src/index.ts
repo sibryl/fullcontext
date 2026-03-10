@@ -55,6 +55,12 @@ function main(): void {
     stdio: ['inherit', 'pipe', 'pipe'],
   });
 
+  // Handle spawn errors (e.g., shell not found)
+  child.on('error', (err: Error) => {
+    process.stderr.write(`[1] fullcontext: ${err.message}\n`);
+    process.exit(1);
+  });
+
   // Buffer stdout chunks
   const stdoutChunks: Buffer[] = [];
   child.stdout?.on('data', (chunk: Buffer) => {

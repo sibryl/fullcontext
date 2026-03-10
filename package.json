@@ -1,0 +1,6 @@
+{
+  "name": "fullcontext",
+  "version": "1.0.0",
+  "description": "Prevent LLMs from truncating command output",
+  "license": "MIT"
+}

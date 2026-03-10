@@ -36,20 +36,10 @@ function transformOutput(output: string): string {
   return lines.map((line, i) => `[${i + 1}] ${line}`).join(' ');
 }
 
-function main(): void {
-  // Extract command arguments (skip node and script path)
-  const args = process.argv.slice(2);
-
-  // Display usage if no arguments provided or help requested
-  if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
-    console.log(USAGE);
-    process.exit(0);
-  }
-
-  // Join all arguments into a single command string for shell execution
-  // This supports pipes (|), redirects (>), chains (&&), and other shell features
-  const command = args.join(' ');
-
+/**
+ * Execute a command and transform its output.
+ */
+function executeCommand(command: string): void {
   // Spawn the command in a shell to support pipes, redirects, etc.
   const child = spawn(command, {
     shell: true,
@@ -100,6 +90,23 @@ function main(): void {
     // Preserve exit code from child process
     process.exit(code ?? 1);
   });
+}
+
+function main(): void {
+  // Extract command arguments (skip node and script path)
+  const args = process.argv.slice(2);
+
+  // Display usage if no arguments provided or help requested
+  if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
+    console.log(USAGE);
+    process.exit(0);
+  }
+
+  // Join all arguments into a single command string for shell execution
+  // This supports pipes (|), redirects (>), chains (&&), and other shell features
+  const command = args.join(' ');
+
+  executeCommand(command);
 }
 
 main();

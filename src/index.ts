@@ -17,6 +17,12 @@ making it impossible for LLMs to use head/tail/grep to hide parts of the output.
 function main(): void {
   // Extract command arguments (skip node and script path)
   const args = process.argv.slice(2);
+
+  // Display usage if no arguments provided
+  if (args.length === 0) {
+    console.log(USAGE);
+    process.exit(0);
+  }
 }
 
 main();

@@ -14,6 +14,14 @@ Examples:
 Transforms multi-line output into single-line format with [N] line markers,
 making it impossible for LLMs to use head/tail/grep to hide parts of the output.`;
 
+/**
+ * Transform multi-line output into single-line format with line markers
+ */
+function transformOutput(output: string): string {
+  const lines = output.split('\n');
+  return lines.map((line, i) => `[${i + 1}] ${line}`).join(' ');
+}
+
 function main(): void {
   // Extract command arguments (skip node and script path)
   const args = process.argv.slice(2);

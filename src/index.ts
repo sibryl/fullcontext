@@ -62,6 +62,13 @@ function main(): void {
     process.exit(1);
   });
 
+  // Forward SIGINT/SIGTERM to child process for proper cleanup
+  const forwardSignal = (signal: NodeJS.Signals) => {
+    child.kill(signal);
+  };
+  process.on('SIGINT', () => forwardSignal('SIGINT'));
+  process.on('SIGTERM', () => forwardSignal('SIGTERM'));
+
   // Buffer stdout chunks
   const stdoutChunks: Buffer[] = [];
   child.stdout?.on('data', (chunk: Buffer) => {

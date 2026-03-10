@@ -67,12 +67,14 @@ Add it to your `package.json` for commands you want agents to see in full:
 {
   "scripts": {
     "test": "fullcontext jest",
-    "lint": "fullcontext eslint src/",
+    "lint": "fullcontext 'npm run lint:es && npm run lint:ts'",
     "typecheck": "fullcontext tsc --noEmit",
     "build": "fullcontext npm run compile"
   }
 }
 ```
+
+For aggregate commands using `&&`, `||`, or `|`, wrap the entire command in quotes.
 
 Now when an AI agent runs `npm test`, it gets the complete output every time.
 

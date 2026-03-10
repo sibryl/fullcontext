@@ -2,5 +2,9 @@
   "name": "fullcontext",
   "version": "1.0.0",
   "description": "Prevent LLMs from truncating command output",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.4.0",
+    "typescript": "^5.9.3"
+  }
 }

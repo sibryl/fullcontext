@@ -60,6 +60,12 @@ function main(): void {
   child.stdout?.on('data', (chunk: Buffer) => {
     stdoutChunks.push(chunk);
   });
+
+  // Buffer stderr chunks
+  const stderrChunks: Buffer[] = [];
+  child.stderr?.on('data', (chunk: Buffer) => {
+    stderrChunks.push(chunk);
+  });
 }
 
 main();

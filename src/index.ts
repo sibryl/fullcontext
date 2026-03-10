@@ -18,8 +18,8 @@ function main(): void {
   // Extract command arguments (skip node and script path)
   const args = process.argv.slice(2);
 
-  // Display usage if no arguments provided
-  if (args.length === 0) {
+  // Display usage if no arguments provided or help requested
+  if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     console.log(USAGE);
     process.exit(0);
   }

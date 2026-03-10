@@ -54,6 +54,12 @@ function main(): void {
     shell: true,
     stdio: ['inherit', 'pipe', 'pipe'],
   });
+
+  // Buffer stdout chunks
+  const stdoutChunks: Buffer[] = [];
+  child.stdout?.on('data', (chunk: Buffer) => {
+    stdoutChunks.push(chunk);
+  });
 }
 
 main();

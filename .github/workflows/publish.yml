@@ -19,7 +19,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
+          # Don't set registry-url - let npm CLI handle OIDC auth
 
       - name: Install dependencies
         run: npm ci
@@ -28,5 +28,5 @@ jobs:
         run: npm run build
 
       - name: Publish with provenance
-        run: npm publish --access public
-        # No token needed - uses OIDC Trusted Publishing
+        run: npm publish --access public --provenance
+        # Uses OIDC Trusted Publishing - no token needed

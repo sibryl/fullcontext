@@ -19,6 +19,12 @@ making it impossible for LLMs to use head/tail/grep to hide parts of the output.
  */
 function transformOutput(output: string): string {
   const lines = output.split('\n');
+
+  // Remove trailing empty line caused by trailing newline
+  if (lines.length > 0 && lines[lines.length - 1] === '') {
+    lines.pop();
+  }
+
   return lines.map((line, i) => `[${i + 1}] ${line}`).join(' ');
 }
 

@@ -15,7 +15,8 @@ Transforms multi-line output into single-line format with [N] line markers,
 making it impossible for LLMs to use head/tail/grep to hide parts of the output.`;
 
 function main(): void {
-  // Main entry point - implementation to follow
+  // Extract command arguments (skip node and script path)
+  const args = process.argv.slice(2);
 }
 
 main();

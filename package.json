@@ -10,6 +10,26 @@
   "engines": {
     "node": ">=14.0.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sibryl/fullcontext.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sibryl/fullcontext/issues"
+  },
+  "homepage": "https://github.com/sibryl/fullcontext#readme",
+  "keywords": [
+    "cli",
+    "llm",
+    "ai",
+    "developer-tools",
+    "command-line",
+    "output",
+    "truncation",
+    "claude",
+    "codex",
+    "copilot"
+  ],
   "scripts": {
     "build": "tsc"
   },

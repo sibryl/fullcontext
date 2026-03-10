@@ -15,7 +15,8 @@ Transforms multi-line output into single-line format with [N] line markers,
 making it impossible for LLMs to use head/tail/grep to hide parts of the output.`;
 
 /**
- * Transform multi-line output into single-line format with line markers
+ * Transform multi-line output into single-line format with line markers.
+ * Empty lines in the middle are preserved with their line numbers (e.g., "[3] ").
  */
 function transformOutput(output: string): string {
   const lines = output.split('\n');

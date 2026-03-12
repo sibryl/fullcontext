@@ -1,20 +1,40 @@
 #!/usr/bin/env node
 
-// fullcontext - Prevent LLMs from truncating command output
+// fullcontext - Stop AI agents from truncating your command output
 
 import { spawn } from 'child_process';
 
-const USAGE = `fullcontext - Prevent LLMs from truncating command output
+const USAGE = `fullcontext - Stop AI agents from truncating your command output
 
 Usage: fullcontext <command> [arguments...]
 
 Examples:
   fullcontext npm test
   fullcontext npx eslint src/
-  fullcontext cat package.json
+  fullcontext cargo build
+  fullcontext pytest
+  fullcontext go test ./...
 
-Transforms multi-line output into single-line format with [N] line markers,
-making it impossible for LLMs to use head/tail/grep to hide parts of the output.`;
+  # For commands with pipes or &&, wrap in quotes:
+  fullcontext 'npm run lint:es && npm run lint:ts'
+  fullcontext 'echo "test" | cat'
+
+How It Works:
+  Transforms multi-line output into a single line with [N] markers.
+  When output is a single line, there's nothing to head or tail.
+  The agent gets everything.
+
+Features:
+  - Zero configuration - Just prefix your command
+  - Preserves exit codes - CI/CD pipelines work correctly
+  - Preserves environment - AWS CLI, kubectl, etc. work seamlessly
+  - Transforms both stdout and stderr - Nothing escapes
+
+Best For:
+  Test runners, linters, type checkers, and build tools where
+  missing output causes agent confusion.
+
+More info: https://github.com/sibryl/fullcontext`;
 
 /**
  * Transform multi-line output into single-line format with line markers.

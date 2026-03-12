@@ -1,6 +1,6 @@
 {
   "name": "fullcontext",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Prevent LLMs from truncating command output",
   "author": "sibryl",
   "license": "MIT",

@@ -2,17 +2,18 @@
 
 ## Current Phase
 
-**Phase 02 — Implement streaming transformer**
+**Phase 03 — Integration validation & docs**
 
 ## Remaining Phases
 
 - [x] Phase 01 — Test infrastructure & baseline tests
-- [ ] Phase 02 — Implement streaming transformer
+- [x] Phase 02 — Implement streaming transformer
 - [ ] Phase 03 — Integration validation & docs
 
 ## Completed Phases
 
 - Phase 01 — Test infrastructure & baseline tests
+- Phase 02 — Implement streaming transformer
 
 ## Notes
 

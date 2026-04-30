@@ -36,6 +36,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "test": "tsc && node --test dist/*.test.js",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {

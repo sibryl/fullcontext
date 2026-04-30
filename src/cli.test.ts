@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import * as path from 'node:path';
 
 const CLI = path.resolve(__dirname, 'index.js');
@@ -52,4 +52,56 @@ test('handles partial final line without trailing newline', () => {
 test('emits lone newline as [1] marker with trailing space', () => {
   const r = runCli('printf "\\n"');
   assert.equal(r.stdout, '[1] \n');
+});
+
+test('streams stdout incrementally', async () => {
+  // The child prints "one", sleeps 500ms, then prints "two".
+  // We assert the first stdout chunk arrives meaningfully before the
+  // child exits, which proves we are streaming rather than buffering.
+  const child = spawn(
+    process.execPath,
+    [CLI, 'printf "one\\n"; sleep 0.5; printf "two\\n"'],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+
+  const firstChunkTime = new Promise<number>((resolve) => {
+    child.stdout.once('data', () => resolve(Date.now()));
+  });
+  const exitTime = new Promise<number>((resolve) => {
+    child.on('close', () => resolve(Date.now()));
+  });
+
+  const chunks: Buffer[] = [];
+  child.stdout.on('data', (c) => chunks.push(c));
+
+  const [t1, t2] = await Promise.all([firstChunkTime, exitTime]);
+
+  // The first chunk must arrive meaningfully before exit.
+  // Use a 200ms margin to be robust on slow CI.
+  assert.ok(
+    t2 - t1 >= 200,
+    `expected first chunk to arrive >=200ms before exit, got ${t2 - t1}ms`,
+  );
+
+  // Final bytes unchanged from the batch implementation
+  const final = Buffer.concat(chunks).toString('utf8');
+  assert.equal(final, '[1] one [2] two\n');
+});
+
+test('streams stderr incrementally and independently from stdout', async () => {
+  const child = spawn(
+    process.execPath,
+    [CLI, 'printf "out\\n"; printf "err\\n" 1>&2'],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+
+  const outChunks: Buffer[] = [];
+  const errChunks: Buffer[] = [];
+  child.stdout.on('data', (c) => outChunks.push(c));
+  child.stderr.on('data', (c) => errChunks.push(c));
+
+  await new Promise((resolve) => child.on('close', resolve));
+
+  assert.equal(Buffer.concat(outChunks).toString('utf8'), '[1] out\n');
+  assert.equal(Buffer.concat(errChunks).toString('utf8'), '[1] err\n');
 });

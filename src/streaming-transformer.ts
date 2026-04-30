@@ -56,6 +56,12 @@ export class StreamingLineTransformer {
     }
   }
 
+  /**
+   * Write a single transformed line to the output stream. The first line
+   * is emitted without a leading space; subsequent lines get a single space
+   * separator so the final byte sequence matches the batch transform format
+   * `[1] a [2] b [3] c`.
+   */
   private emitLine(line: string): void {
     const prefix = this.hasEmitted ? ' ' : '';
     this.output.write(`${prefix}[${this.lineNumber}] ${line}`);

@@ -4,6 +4,10 @@ import { Writable } from 'node:stream';
 import { StreamingLineTransformer } from './streaming-transformer';
 import { transformOutput } from './transform';
 
+/**
+ * Build a Writable sink that records every chunk written to it so tests
+ * can assert on the exact byte sequence received.
+ */
 function collect(): { out: Writable; chunks: string[]; joined: () => string } {
   const chunks: string[] = [];
   const out = new Writable({

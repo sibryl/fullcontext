@@ -47,6 +47,51 @@ function executeCommand(command: string): void {
     stdio: ['inherit', 'pipe', 'pipe'],
   });
 
+  // Track the child's exit code so the EPIPE handler can preserve it if the
+  // child finished before the downstream pipe broke.
+  let childExitCode: number | null = null;
+
+  // Guard against re-entering the shutdown path. EPIPE can fire on both
+  // stdout and stderr in quick succession; we only want to clean up once.
+  let exiting = false;
+
+  /**
+   * Handle an 'error' event from process.stdout or process.stderr.
+   *
+   * For EPIPE: a downstream consumer (like `head`) has closed the pipe we
+   * were writing to. Kill the child so it stops generating output, then
+   * exit cleanly. Preserve the child's exit code if known; otherwise use 0
+   * to match the convention of coreutils tools that treat downstream pipe
+   * closure as normal termination.
+   *
+   * For anything else: re-throw so real bugs surface instead of being
+   * silently swallowed.
+   */
+  const handleOutputError = (err: NodeJS.ErrnoException): void => {
+    if (err.code !== 'EPIPE') {
+      throw err;
+    }
+    if (exiting) {
+      return;
+    }
+    exiting = true;
+
+    // Stop the child so it doesn't keep producing output into a broken pipe.
+    // If the child has already exited this is a no-op.
+    if (child.exitCode === null && child.signalCode === null) {
+      try {
+        child.kill('SIGTERM');
+      } catch {
+        // Child may have exited between the check and kill; ignore.
+      }
+    }
+
+    process.exit(childExitCode ?? 0);
+  };
+
+  process.stdout.on('error', handleOutputError);
+  process.stderr.on('error', handleOutputError);
+
   // Handle spawn errors (e.g., shell not found)
   child.on('error', (err: Error) => {
     process.stderr.write(`[1] fullcontext: ${err.message}\n`);
@@ -75,6 +120,18 @@ function executeCommand(command: string): void {
   });
 
   child.on('close', (code: number | null) => {
+    // Record the exit code so that if an EPIPE handler is invoked during
+    // the flush below, it can preserve the child's actual exit code. In
+    // practice the 'close' handler is usually reached when the pipe is
+    // still open, so this field mostly matters for the race where the
+    // very last write triggers EPIPE.
+    childExitCode = code;
+
+    // If we've already begun shutting down via EPIPE, don't double-exit.
+    if (exiting) {
+      return;
+    }
+
     // Flush any partial lines and emit trailing newlines.
     stdoutTransformer.end();
     stderrTransformer.end();

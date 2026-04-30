@@ -107,17 +107,15 @@ test('streams stderr incrementally and independently from stdout', async () => {
 });
 
 test('exits cleanly when downstream pipe closes early (EPIPE)', async () => {
-  // Run a command that would normally produce 1000 lines and pipe it into
-  // `head -n 5`, which closes its stdin after reading 5 lines. The wrapper
-  // must handle the resulting EPIPE without printing an uncaught exception
-  // or exiting with an error code.
+  // Generate a large volume of output and pipe through `head -c 100`.
+  // head -c closes its stdin after 100 bytes, while the wrapper has far
+  // more to write. This guarantees an EPIPE on the wrapper's side — unlike
+  // `head -n N`, which would just count newlines and drain our single-line
+  // streaming output naturally without ever closing its read end.
   //
-  // We invoke `bash` explicitly (not `sh`) because `set -o pipefail` is
-  // required here and is NOT supported by `dash` — the default /bin/sh on
-  // most Linux CI images. With pipefail, a non-zero exit from the wrapper
-  // (e.g. from an uncaught EPIPE) would propagate through the pipeline
-  // and fail the test.
-  const cmd = `set -o pipefail; '${process.execPath}' '${CLI}' 'for i in $(seq 1 1000); do echo "$i"; done' | head -n 5`;
+  // We invoke bash (not sh) because `set -o pipefail` is not portable to
+  // dash (the default /bin/sh on many Linux CI images).
+  const cmd = `set -o pipefail; '${process.execPath}' '${CLI}' 'for i in $(seq 1 100000); do echo line $i; done' | head -c 100`;
   const result = spawnSync('bash', ['-c', cmd], {
     encoding: 'utf8',
   });
@@ -224,7 +222,7 @@ test('forwards SIGINT to the child and exits', async () => {
   );
 });
 
-test('handles invalid UTF-8 bytes split across a chunk boundary without crashing', () => {
+test('handles invalid UTF-8 bytes in a single chunk without crashing', () => {
   // Emit raw invalid bytes: 0xff 0xfe are never valid UTF-8 lead bytes.
   // Use printf with octal escapes so the shell passes the literal bytes
   // through to the wrapper's child.

@@ -5,6 +5,10 @@ import * as path from 'node:path';
 
 const CLI = path.resolve(__dirname, 'index.js');
 
+/**
+ * Spawn the compiled CLI with a single command argument and capture its
+ * stdout, stderr, and exit status.
+ */
 function runCli(command: string) {
   const result = spawnSync(process.execPath, [CLI, command], {
     encoding: 'utf8',

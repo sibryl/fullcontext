@@ -9,7 +9,9 @@
     "fullcontext": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/*.test.js",
+    "!dist/*.test.d.ts"
   ],
   "engines": {
     "node": ">=14.0.0"

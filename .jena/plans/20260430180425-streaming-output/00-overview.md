@@ -74,8 +74,19 @@ identical bytes — only the arrival pattern changes.
 | 01 | Test infrastructure & baseline tests | 3 | Add `node:test`-based test harness. Extract `transformOutput` logic into a testable module. Add tests that lock in current output format as the spec. |
 | 02 | Implement streaming transformer | 3 | Replace the buffer-then-transform approach with a per-stream `StreamingLineTransformer` that emits completed lines immediately. Wire into `executeCommand`. |
 | 03 | Integration validation & docs | 2 | Add integration tests that spawn the compiled binary and assert streaming timing + final bytes. Update README to mention streaming. |
+| 04 | Robustness: EPIPE, signals, and volume | 3 | Follow-up from a production-readiness audit. Handle EPIPE on `process.stdout`/`process.stderr` so `fullcontext <cmd> \| head` exits cleanly. Add integration tests for SIGINT forwarding, invalid UTF-8 at chunk boundaries, and ~1 MB output volume. |
 
-**Total:** 8 story points across 3 phases. Each phase ≤ 3 points.
+**Total:** 11 story points across 4 phases. Each phase ≤ 3 points.
+
+### Phase 04 scope note
+
+Phase 04 intentionally does **not** attempt byte-identical comparison with
+the pre-streaming implementation, and does not reintroduce the batch-at-close
+output path. The user confirmed that no consumer was relying on the old
+timing, so that entire risk category is dropped. Phase 04 asserts only
+structural invariants (line counts, markers, trailing newlines) and
+behavioral contracts (exit cleanly on EPIPE, forward SIGINT, don't corrupt
+or crash on bad input).
 
 ## Success Criteria
 

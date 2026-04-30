@@ -3,7 +3,7 @@
 // fullcontext - Stop AI agents from truncating your command output
 
 import { spawn } from 'child_process';
-import { transformOutput } from './transform';
+import { StreamingLineTransformer } from './streaming-transformer';
 
 const USAGE = `fullcontext - Stop AI agents from truncating your command output
 
@@ -60,33 +60,24 @@ function executeCommand(command: string): void {
   process.on('SIGINT', () => forwardSignal('SIGINT'));
   process.on('SIGTERM', () => forwardSignal('SIGTERM'));
 
-  // Buffer stdout chunks
-  const stdoutChunks: Buffer[] = [];
+  // One transformer per output stream. Each maintains its own line counter
+  // and its own "first-line-emitted" state, matching the existing behavior
+  // where stdout and stderr are transformed independently.
+  const stdoutTransformer = new StreamingLineTransformer(process.stdout);
+  const stderrTransformer = new StreamingLineTransformer(process.stderr);
+
   child.stdout?.on('data', (chunk: Buffer) => {
-    stdoutChunks.push(chunk);
+    stdoutTransformer.write(chunk);
   });
 
-  // Buffer stderr chunks
-  const stderrChunks: Buffer[] = [];
   child.stderr?.on('data', (chunk: Buffer) => {
-    stderrChunks.push(chunk);
+    stderrTransformer.write(chunk);
   });
 
-  // Handle process close - transform and output
   child.on('close', (code: number | null) => {
-    // Transform and output stdout
-    const stdout = Buffer.concat(stdoutChunks).toString();
-    const transformedStdout = transformOutput(stdout);
-    if (transformedStdout) {
-      process.stdout.write(transformedStdout + '\n');
-    }
-
-    // Transform and output stderr
-    const stderr = Buffer.concat(stderrChunks).toString();
-    const transformedStderr = transformOutput(stderr);
-    if (transformedStderr) {
-      process.stderr.write(transformedStderr + '\n');
-    }
+    // Flush any partial lines and emit trailing newlines.
+    stdoutTransformer.end();
+    stderrTransformer.end();
 
     // Preserve exit code from child process
     process.exit(code ?? 1);

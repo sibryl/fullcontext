@@ -59,7 +59,9 @@ identical bytes — only the arrival pattern changes.
 
 ## Tech Stack
 
-- **Runtime:** Node.js ≥ 14 (unchanged, per `package.json` engines field).
+- **Runtime:** Node.js ≥ 18 (raised from ≥ 14 in Phase 05 to match the
+  `node:test` runtime requirement; Node 14/16 are both long past EOL and
+  could not run the test suite anyway).
 - **Language:** TypeScript 5.9 (unchanged).
 - **Dependencies:** Zero runtime dependencies (unchanged — critical feature).
 - **Test runner:** Node's built-in `node:test` module (ships with Node 18+,
@@ -75,8 +77,9 @@ identical bytes — only the arrival pattern changes.
 | 02 | Implement streaming transformer | 3 | Replace the buffer-then-transform approach with a per-stream `StreamingLineTransformer` that emits completed lines immediately. Wire into `executeCommand`. |
 | 03 | Integration validation & docs | 2 | Add integration tests that spawn the compiled binary and assert streaming timing + final bytes. Update README to mention streaming. |
 | 04 | Robustness: EPIPE, signals, and volume | 3 | Follow-up from a production-readiness audit. Handle EPIPE on `process.stdout`/`process.stderr` so `fullcontext <cmd> \| head` exits cleanly. Add integration tests for SIGINT forwarding, invalid UTF-8 at chunk boundaries, and ~1 MB output volume. |
+| 05 | CI validation & release test gate | 3 | Pre-release infrastructure. Bump `engines` to `node >=18` to match the `node:test` runtime. Add a `ci.yml` workflow (ubuntu + macos × node 18/20/22) for push and PR validation. Reorder `release.yml` so `npm test` runs before any mutating step (version bump, tag push, GitHub release, npm publish). Document a pre-release smoke-test checklist. No source changes. |
 
-**Total:** 11 story points across 4 phases. Each phase ≤ 3 points.
+**Total:** 14 story points across 5 phases. Each phase ≤ 3 points.
 
 ### Phase 04 scope note
 
@@ -87,6 +90,17 @@ timing, so that entire risk category is dropped. Phase 04 asserts only
 structural invariants (line counts, markers, trailing newlines) and
 behavioral contracts (exit cleanly on EPIPE, forward SIGINT, don't corrupt
 or crash on bad input).
+
+### Phase 05 scope note
+
+Phase 05 is pure release-readiness infrastructure — no `src/` changes, no
+new runtime dependencies, no behavioral changes. It exists because the
+project currently has **zero CI** and its release workflow publishes
+without running tests. Phase 05 closes both gaps before the next
+`latest` release. It also bumps `engines` from `>=14.0.0` to `>=18.0.0`
+to match the actual test runtime requirement (`node:test` is Node 18+
+only). Windows CI, canary releases, dependabot, and PR templates are
+explicitly out of scope.
 
 ## Success Criteria
 

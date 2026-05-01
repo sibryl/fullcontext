@@ -42,13 +42,52 @@ More info: https://github.com/sibryl/fullcontext`;
  */
 function executeCommand(command: string): void {
   // Spawn the command in a shell to support pipes, redirects, etc.
+  //
+  // `detached: true` makes the child the leader of a new process group.
+  // That lets us signal the entire wrapped-command tree (shell + any
+  // grandchildren the shell may have forked) via process.kill(-pid, sig),
+  // rather than just the shell PID. This is critical on Linux where
+  // /bin/sh is dash: dash fork(2)s a child for `sh -c 'cmd'` and does not
+  // forward SIGINT to that child. Without group signalling, SIGINT kills
+  // the shell but the grandchild keeps the pipe open and we block in
+  // 'close' until the grandchild exits on its own. See Phase 06 plan.
+  //
+  // We intentionally do NOT call child.unref(): we want the wrapper to
+  // keep running until the child tree exits, exactly as before.
   const child = spawn(command, {
     shell: true,
     stdio: ['inherit', 'pipe', 'pipe'],
+    detached: true,
   });
 
-  // Track the child's exit code so the EPIPE handler can preserve it if the
-  // child finished before the downstream pipe broke.
+  /**
+   * Send a signal to the child's entire process group on POSIX, falling
+   * back to a direct signal-to-PID on Windows or when the group is
+   * already gone.
+   *
+   * Always swallows ESRCH-style errors — if the child already exited, a
+   * failed kill is the desired outcome, not a bug to surface.
+   */
+  const killChildTree = (signal: NodeJS.Signals): void => {
+    if (process.platform !== 'win32' && typeof child.pid === 'number') {
+      try {
+        // Negative PID = "every process in the group led by this PID".
+        process.kill(-child.pid, signal);
+        return;
+      } catch {
+        // Group is gone (child already exited) or not signalable from
+        // this process; fall through to a best-effort direct kill.
+      }
+    }
+    try {
+      child.kill(signal);
+    } catch {
+      // Child may have exited between the platform check and kill.
+    }
+  };
+
+  // Track the child's exit code so the EPIPE handler can preserve it if
+  // the child finished before the downstream pipe broke.
   let childExitCode: number | null = null;
 
   // Guard against re-entering the shutdown path. EPIPE can fire on both
@@ -59,10 +98,10 @@ function executeCommand(command: string): void {
    * Handle an 'error' event from process.stdout or process.stderr.
    *
    * For EPIPE: a downstream consumer (like `head`) has closed the pipe we
-   * were writing to. Kill the child so it stops generating output, then
-   * exit cleanly. Preserve the child's exit code if known; otherwise use 0
-   * to match the convention of coreutils tools that treat downstream pipe
-   * closure as normal termination.
+   * were writing to. Kill the child tree so it stops generating output,
+   * then exit cleanly. Preserve the child's exit code if known; otherwise
+   * use 0 to match the convention of coreutils tools that treat
+   * downstream pipe closure as normal termination.
    *
    * For anything else: re-throw so real bugs surface instead of being
    * silently swallowed.
@@ -76,14 +115,10 @@ function executeCommand(command: string): void {
     }
     exiting = true;
 
-    // Stop the child so it doesn't keep producing output into a broken pipe.
-    // If the child has already exited this is a no-op.
+    // Stop the entire child tree so nothing keeps writing into a broken
+    // pipe. If the shell already exited this is effectively a no-op.
     if (child.exitCode === null && child.signalCode === null) {
-      try {
-        child.kill('SIGTERM');
-      } catch {
-        // Child may have exited between the check and kill; ignore.
-      }
+      killChildTree('SIGTERM');
     }
 
     process.exit(childExitCode ?? 0);
@@ -98,12 +133,11 @@ function executeCommand(command: string): void {
     process.exit(1);
   });
 
-  // Forward SIGINT/SIGTERM to child process for proper cleanup
-  const forwardSignal = (signal: NodeJS.Signals) => {
-    child.kill(signal);
-  };
-  process.on('SIGINT', () => forwardSignal('SIGINT'));
-  process.on('SIGTERM', () => forwardSignal('SIGTERM'));
+  // Forward SIGINT/SIGTERM to the entire child tree so a Ctrl-C in the
+  // user's terminal (or a kill from a parent process) reaches the
+  // wrapped command's grandchildren, not just the shell.
+  process.on('SIGINT', () => killChildTree('SIGINT'));
+  process.on('SIGTERM', () => killChildTree('SIGTERM'));
 
   // One transformer per output stream. Each maintains its own line counter
   // and its own "first-line-emitted" state, matching the existing behavior
@@ -121,10 +155,7 @@ function executeCommand(command: string): void {
 
   child.on('close', (code: number | null) => {
     // Record the exit code so that if an EPIPE handler is invoked during
-    // the flush below, it can preserve the child's actual exit code. In
-    // practice the 'close' handler is usually reached when the pipe is
-    // still open, so this field mostly matters for the race where the
-    // very last write triggers EPIPE.
+    // the flush below, it can preserve the child's actual exit code.
     childExitCode = code;
 
     // If we've already begun shutting down via EPIPE, don't double-exit.

@@ -163,6 +163,19 @@ function executeCommand(command: string): void {
       return;
     }
 
+    // Race guard for older libuv (observed on macOS Node 18): the child
+    // may have been group-killed by our EPIPE handler, but the 'close'
+    // event can fire before the 'error' event on process.stdout. In that
+    // case code is null (signal-killed) and `code ?? 1` would exit 1,
+    // masking what is semantically a normal EPIPE termination.
+    //
+    // If our own stdout is no longer writable, the downstream consumer
+    // closed their read end — treat this as EPIPE and exit 0 to match
+    // coreutils convention, regardless of which event won the race.
+    if (process.stdout.destroyed || process.stdout.writableEnded) {
+      process.exit(0);
+    }
+
     // Flush any partial lines and emit trailing newlines.
     stdoutTransformer.end();
     stderrTransformer.end();

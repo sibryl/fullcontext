@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 06 — Signal-forwarding fix for Linux (pending).
+All phases complete. Ready for PR merge.
 
 ## Remaining Phases
 
@@ -11,7 +11,7 @@ Phase 06 — Signal-forwarding fix for Linux (pending).
 - [x] Phase 03 — Integration validation & docs
 - [x] Phase 04 — Robustness: EPIPE, signals, and volume
 - [x] Phase 05 — CI validation & release test gate
-- [ ] Phase 06 — Signal-forwarding fix for Linux (CI red → green)
+- [x] Phase 06 — Signal-forwarding fix for Linux (CI red → green)
 
 ## Completed Phases
 
@@ -20,6 +20,7 @@ Phase 06 — Signal-forwarding fix for Linux (pending).
 - Phase 03 — Integration validation & docs
 - Phase 04 — Robustness: EPIPE, signals, and volume
 - Phase 05 — CI validation & release test gate
+- Phase 06 — Signal-forwarding fix for Linux + EPIPE/close race fix for macOS Node 18
 
 ## Notes
 
@@ -47,3 +48,10 @@ Phase 06 — Signal-forwarding fix for Linux (pending).
   be fully green across all 6 matrix cells (ubuntu × {18,20,22},
   macos × {18,20,22}) before Phase 06 is considered complete.
 - Ready for PR merge after Phase 06 completes and CI is green.
+- Phase 06 completed in two commits: (1) `detached: true` + group-signal
+  fix addressed the Ubuntu failure; (2) a follow-up defensive guard in
+  the `close` handler addressed a macOS Node 18 regression where the
+  `close` event could fire before the EPIPE `error` handler on older
+  libuv, causing `code ?? 1` to exit 1 instead of 0. The guard exits 0
+  when `process.stdout` is already destroyed/ended, matching coreutils
+  EPIPE convention. CI run 25207935949: all 6 cells green.

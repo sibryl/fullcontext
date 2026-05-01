@@ -12,6 +12,11 @@ on:
           - patch
           - minor
           - major
+      skip_bump:
+        description: 'Skip version bump (republish current version). When true, the `version` input above is ignored and the current package.json version is published as-is. Useful when a previous run succeeded at tagging/release creation but failed at npm publish.'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   release:
@@ -28,6 +33,16 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+
+      - name: Upgrade npm (required for OIDC trusted publishing)
+        # OIDC trusted publishing requires npm >= 11.5.1. Node 22 ships with
+        # npm 10.x, which falls back to traditional auth and fails with
+        # ENEEDAUTH. We pin to npm@11 (major range) rather than @latest to
+        # avoid a MODULE_NOT_FOUND bug in the bundled npm's self-upgrade
+        # path when targeting @latest. If this ever breaks, a corepack-based
+        # fallback (`corepack prepare npm@latest --activate`) is the next
+        # option to try.
+        run: npm install -g npm@11
 
       # ── Test gate ─────────────────────────────────────────────────────
       # Install, build, and test BEFORE any mutating action (version bump,
@@ -54,14 +69,17 @@ jobs:
 
       - name: Bump version
         id: bump
+        if: inputs.skip_bump != true
         run: |
           npm version ${{ inputs.version }} -m "chore: release v%s"
           echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
       - name: Push changes
+        if: inputs.skip_bump != true
         run: git push --follow-tags
 
       - name: Create GitHub Release
+        if: inputs.skip_bump != true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.bump.outputs.version }}

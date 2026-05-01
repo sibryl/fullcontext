@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**Phase 05 — CI validation & release test gate** (pending).
+All phases complete. Ready for PR.
 
 ## Remaining Phases
 
@@ -10,7 +10,7 @@
 - [x] Phase 02 — Implement streaming transformer
 - [x] Phase 03 — Integration validation & docs
 - [x] Phase 04 — Robustness: EPIPE, signals, and volume
-- [ ] Phase 05 — CI validation & release test gate
+- [x] Phase 05 — CI validation & release test gate
 
 ## Completed Phases
 
@@ -18,6 +18,7 @@
 - Phase 02 — Implement streaming transformer
 - Phase 03 — Integration validation & docs
 - Phase 04 — Robustness: EPIPE, signals, and volume
+- Phase 05 — CI validation & release test gate
 
 ## Notes
 

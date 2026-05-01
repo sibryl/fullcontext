@@ -78,8 +78,9 @@ identical bytes — only the arrival pattern changes.
 | 03 | Integration validation & docs | 2 | Add integration tests that spawn the compiled binary and assert streaming timing + final bytes. Update README to mention streaming. |
 | 04 | Robustness: EPIPE, signals, and volume | 3 | Follow-up from a production-readiness audit. Handle EPIPE on `process.stdout`/`process.stderr` so `fullcontext <cmd> \| head` exits cleanly. Add integration tests for SIGINT forwarding, invalid UTF-8 at chunk boundaries, and ~1 MB output volume. |
 | 05 | CI validation & release test gate | 3 | Pre-release infrastructure. Bump `engines` to `node >=18` to match the `node:test` runtime. Add a `ci.yml` workflow (ubuntu + macos × node 18/20/22) for push and PR validation. Reorder `release.yml` so `npm test` runs before any mutating step (version bump, tag push, GitHub release, npm publish). Document a pre-release smoke-test checklist. No source changes. |
+| 06 | Signal-forwarding fix for Linux (CI red → green) | 2 | CI surfaced a real Linux-only bug: on Ubuntu (`/bin/sh` = dash), `child.kill('SIGINT')` hits the shell but not its grandchild, so the wrapper blocks in `'close'` until the grandchild exits naturally. Fix by spawning the child with `detached: true` and routing SIGINT/SIGTERM (and the EPIPE cleanup kill) through a `killChildTree` helper that signals the whole process group on POSIX, with a Windows-safe fallback. No new deps. |
 
-**Total:** 14 story points across 5 phases. Each phase ≤ 3 points.
+**Total:** 16 story points across 6 phases. Each phase ≤ 3 points.
 
 ### Phase 04 scope note
 
@@ -101,6 +102,25 @@ without running tests. Phase 05 closes both gaps before the next
 to match the actual test runtime requirement (`node:test` is Node 18+
 only). Windows CI, canary releases, dependabot, and PR templates are
 explicitly out of scope.
+
+### Phase 06 scope note
+
+Phase 06 is a follow-up correctness fix. Phase 05's new CI matrix
+immediately surfaced a Linux-only bug in the Phase 04 SIGINT-forwarding
+path: with `/bin/sh` = dash on Ubuntu, sending SIGINT to the child PID
+kills the shell but leaves the grandchild (`sleep 30` in the test,
+`npm test`'s node subprocess in real usage) holding the pipe open, so
+the wrapper blocks in its `'close'` handler until the grandchild exits
+naturally. All three Ubuntu matrix cells time out at 30 seconds on the
+`forwards SIGINT to the child and exits` test; all three macOS cells
+pass because bash exec-optimizes `sh -c '<single command>'` into the
+sleep process. Phase 06 fixes the wrapper by spawning the child with
+`detached: true` (making it a process-group leader) and routing all
+signal forwards through a helper that signals the whole group on POSIX.
+Zero new dependencies, no test changes — the existing test was written
+correctly against the intended behavior; the wrapper is what needed to
+change. Scope is deliberately minimal: one `src/index.ts` edit, one
+commit, CI goes green.
 
 ## Success Criteria
 

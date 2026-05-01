@@ -1,3 +1,5 @@
+> **⚠️ Partially superseded:** The `skip_bump` input added here is still in use, but the `npm@11` version pin was later reverted to `npm@latest`. See [`2026-05-01-fix-release-node20.md`](./2026-05-01-fix-release-node20.md) for the complete fix. Preserved for historical context.
+
 ## Problem
 
 The previous release workflow attempt reached the publish step but failed to authenticate with npm, even though everything upstream had completed successfully — tag created, GitHub release page live. The underlying cause was that the `npm` version shipped with the GitHub Actions runner is too old to use our secure publishing path.

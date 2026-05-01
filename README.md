@@ -114,7 +114,7 @@ That's it. No configuration, no options, no complexity.
 
 ## Compatibility
 
-- **Node.js**: 14.0.0 and above
+- **Node.js**: 18.0.0 and above
 - **Platforms**: macOS, Linux, Windows
 - **AI Tools**: Works with any AI coding assistant that executes shell commands
 

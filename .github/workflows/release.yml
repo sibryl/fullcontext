@@ -27,6 +27,25 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+
+      # ── Test gate ─────────────────────────────────────────────────────
+      # Install, build, and test BEFORE any mutating action (version bump,
+      # git push, GitHub release, npm publish). If tests fail, the job
+      # aborts with no lingering tags or releases to clean up. `npm publish`
+      # below will re-run `npm run build` via the `prepublishOnly` hook, so
+      # the build here is primarily for the test step's dist/ output.
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      # ── Mutating steps (only reached if tests pass) ───────────────────
 
       - name: Upgrade npm for OIDC support
         run: npm install -g npm@latest
@@ -50,12 +69,6 @@ jobs:
         with:
           tag_name: v${{ steps.bump.outputs.version }}
           generate_release_notes: true
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
 
       - name: Publish to npm
         run: npm publish --access public --provenance

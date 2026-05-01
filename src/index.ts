@@ -3,6 +3,7 @@
 // fullcontext - Stop AI agents from truncating your command output
 
 import { spawn } from 'child_process';
+import { StreamingLineTransformer } from './streaming-transformer';
 
 const USAGE = `fullcontext - Stop AI agents from truncating your command output
 
@@ -37,34 +38,94 @@ Best For:
 More info: https://github.com/sibryl/fullcontext`;
 
 /**
- * Transform multi-line output into single-line format with line markers.
- * Empty lines in the middle are preserved with their line numbers (e.g., "[3] ").
- */
-function transformOutput(output: string): string {
-  const lines = output.split('\n');
-
-  // Remove trailing empty line caused by trailing newline
-  if (lines.length > 0 && lines[lines.length - 1] === '') {
-    lines.pop();
-  }
-
-  // Handle empty output
-  if (lines.length === 0) {
-    return '';
-  }
-
-  return lines.map((line, i) => `[${i + 1}] ${line}`).join(' ');
-}
-
-/**
  * Execute a command and transform its output.
  */
 function executeCommand(command: string): void {
   // Spawn the command in a shell to support pipes, redirects, etc.
+  //
+  // `detached: true` makes the child the leader of a new process group.
+  // That lets us signal the entire wrapped-command tree (shell + any
+  // grandchildren the shell may have forked) via process.kill(-pid, sig),
+  // rather than just the shell PID. This is critical on Linux where
+  // /bin/sh is dash: dash fork(2)s a child for `sh -c 'cmd'` and does not
+  // forward SIGINT to that child. Without group signalling, SIGINT kills
+  // the shell but the grandchild keeps the pipe open and we block in
+  // 'close' until the grandchild exits on its own. See Phase 06 plan.
+  //
+  // We intentionally do NOT call child.unref(): we want the wrapper to
+  // keep running until the child tree exits, exactly as before.
   const child = spawn(command, {
     shell: true,
     stdio: ['inherit', 'pipe', 'pipe'],
+    detached: true,
   });
+
+  /**
+   * Send a signal to the child's entire process group on POSIX, falling
+   * back to a direct signal-to-PID on Windows or when the group is
+   * already gone.
+   *
+   * Always swallows ESRCH-style errors — if the child already exited, a
+   * failed kill is the desired outcome, not a bug to surface.
+   */
+  const killChildTree = (signal: NodeJS.Signals): void => {
+    if (process.platform !== 'win32' && typeof child.pid === 'number') {
+      try {
+        // Negative PID = "every process in the group led by this PID".
+        process.kill(-child.pid, signal);
+        return;
+      } catch {
+        // Group is gone (child already exited) or not signalable from
+        // this process; fall through to a best-effort direct kill.
+      }
+    }
+    try {
+      child.kill(signal);
+    } catch {
+      // Child may have exited between the platform check and kill.
+    }
+  };
+
+  // Track the child's exit code so the EPIPE handler can preserve it if
+  // the child finished before the downstream pipe broke.
+  let childExitCode: number | null = null;
+
+  // Guard against re-entering the shutdown path. EPIPE can fire on both
+  // stdout and stderr in quick succession; we only want to clean up once.
+  let exiting = false;
+
+  /**
+   * Handle an 'error' event from process.stdout or process.stderr.
+   *
+   * For EPIPE: a downstream consumer (like `head`) has closed the pipe we
+   * were writing to. Kill the child tree so it stops generating output,
+   * then exit cleanly. Preserve the child's exit code if known; otherwise
+   * use 0 to match the convention of coreutils tools that treat
+   * downstream pipe closure as normal termination.
+   *
+   * For anything else: re-throw so real bugs surface instead of being
+   * silently swallowed.
+   */
+  const handleOutputError = (err: NodeJS.ErrnoException): void => {
+    if (err.code !== 'EPIPE') {
+      throw err;
+    }
+    if (exiting) {
+      return;
+    }
+    exiting = true;
+
+    // Stop the entire child tree so nothing keeps writing into a broken
+    // pipe. If the shell already exited this is effectively a no-op.
+    if (child.exitCode === null && child.signalCode === null) {
+      killChildTree('SIGTERM');
+    }
+
+    process.exit(childExitCode ?? 0);
+  };
+
+  process.stdout.on('error', handleOutputError);
+  process.stderr.on('error', handleOutputError);
 
   // Handle spawn errors (e.g., shell not found)
   child.on('error', (err: Error) => {
@@ -72,40 +133,52 @@ function executeCommand(command: string): void {
     process.exit(1);
   });
 
-  // Forward SIGINT/SIGTERM to child process for proper cleanup
-  const forwardSignal = (signal: NodeJS.Signals) => {
-    child.kill(signal);
-  };
-  process.on('SIGINT', () => forwardSignal('SIGINT'));
-  process.on('SIGTERM', () => forwardSignal('SIGTERM'));
+  // Forward SIGINT/SIGTERM to the entire child tree so a Ctrl-C in the
+  // user's terminal (or a kill from a parent process) reaches the
+  // wrapped command's grandchildren, not just the shell.
+  process.on('SIGINT', () => killChildTree('SIGINT'));
+  process.on('SIGTERM', () => killChildTree('SIGTERM'));
 
-  // Buffer stdout chunks
-  const stdoutChunks: Buffer[] = [];
+  // One transformer per output stream. Each maintains its own line counter
+  // and its own "first-line-emitted" state, matching the existing behavior
+  // where stdout and stderr are transformed independently.
+  const stdoutTransformer = new StreamingLineTransformer(process.stdout);
+  const stderrTransformer = new StreamingLineTransformer(process.stderr);
+
   child.stdout?.on('data', (chunk: Buffer) => {
-    stdoutChunks.push(chunk);
+    stdoutTransformer.write(chunk);
   });
 
-  // Buffer stderr chunks
-  const stderrChunks: Buffer[] = [];
   child.stderr?.on('data', (chunk: Buffer) => {
-    stderrChunks.push(chunk);
+    stderrTransformer.write(chunk);
   });
 
-  // Handle process close - transform and output
   child.on('close', (code: number | null) => {
-    // Transform and output stdout
-    const stdout = Buffer.concat(stdoutChunks).toString();
-    const transformedStdout = transformOutput(stdout);
-    if (transformedStdout) {
-      process.stdout.write(transformedStdout + '\n');
+    // Record the exit code so that if an EPIPE handler is invoked during
+    // the flush below, it can preserve the child's actual exit code.
+    childExitCode = code;
+
+    // If we've already begun shutting down via EPIPE, don't double-exit.
+    if (exiting) {
+      return;
     }
 
-    // Transform and output stderr
-    const stderr = Buffer.concat(stderrChunks).toString();
-    const transformedStderr = transformOutput(stderr);
-    if (transformedStderr) {
-      process.stderr.write(transformedStderr + '\n');
+    // Race guard for older libuv (observed on macOS Node 18): the child
+    // may have been group-killed by our EPIPE handler, but the 'close'
+    // event can fire before the 'error' event on process.stdout. In that
+    // case code is null (signal-killed) and `code ?? 1` would exit 1,
+    // masking what is semantically a normal EPIPE termination.
+    //
+    // If our own stdout is no longer writable, the downstream consumer
+    // closed their read end — treat this as EPIPE and exit 0 to match
+    // coreutils convention, regardless of which event won the race.
+    if (process.stdout.destroyed || process.stdout.writableEnded) {
+      process.exit(0);
     }
+
+    // Flush any partial lines and emit trailing newlines.
+    stdoutTransformer.end();
+    stderrTransformer.end();
 
     // Preserve exit code from child process
     process.exit(code ?? 1);

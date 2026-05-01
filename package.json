@@ -9,10 +9,12 @@
     "fullcontext": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/*.test.js",
+    "!dist/*.test.d.ts"
   ],
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   },
   "repository": {
     "type": "git",
@@ -36,6 +38,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "test": "tsc && node --test dist/*.test.js",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {

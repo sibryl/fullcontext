@@ -82,7 +82,7 @@ Now when an AI agent runs `npm test`, it gets the complete output every time.
 
 1. Runs your command exactly as specified
 2. Captures stdout and stderr separately
-3. Transforms each into a single line with `[N]` line markers
+3. Streams each line with an `[N]` marker as the child emits it, joined into a single line so `head`/`tail` can't truncate the final output
 4. Preserves the original exit code
 5. Preserves all environment variables (AWS credentials, API keys, etc.)
 
@@ -90,6 +90,7 @@ That's it. No configuration, no options, no complexity.
 
 ## Features
 
+- **Streams output live** - Lines appear as the child emits them, just like a normal terminal. The final bytes are still the single-line `[N]` format so AI agents still see the complete output.
 - **Zero configuration** - Just prefix your command
 - **Preserves exit codes** - CI/CD pipelines work correctly
 - **Preserves environment** - AWS CLI, kubectl, and other tools work seamlessly
@@ -109,15 +110,19 @@ That's it. No configuration, no options, no complexity.
 **Don't use fullcontext for:**
 - Interactive commands
 - Commands that output binary data
-- Streaming/real-time output (logs, watch modes)
+- Commands that rely on in-place terminal updates (progress bars using `\r`, curses-style UIs, watch modes that redraw)
 
 ## Compatibility
 
-- **Node.js**: 14.0.0 and above
+- **Node.js**: 18.0.0 and above
 - **Platforms**: macOS, Linux, Windows
 - **AI Tools**: Works with any AI coding assistant that executes shell commands
 
 ## FAQ
+
+### Does output stream, or is it buffered until the command exits?
+
+Output streams. As soon as the child process emits a line, `fullcontext` transforms it and writes it to stdout/stderr. The transformed format - a single line with `[N]` markers - is preserved; streaming only changes *when* bytes are written, not *what* bytes are written.
 
 ### Does this affect human developers?
 

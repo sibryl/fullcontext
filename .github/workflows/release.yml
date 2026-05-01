@@ -47,9 +47,6 @@ jobs:
 
       # ── Mutating steps (only reached if tests pass) ───────────────────
 
-      - name: Upgrade npm for OIDC support
-        run: npm install -g npm@latest
-
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"

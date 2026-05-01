@@ -130,7 +130,9 @@ function executeCommand(command: string): void {
   // Handle spawn errors (e.g., shell not found)
   child.on('error', (err: Error) => {
     process.stderr.write(`[1] fullcontext: ${err.message}\n`);
-    process.exit(1);
+    // See child.on('close') below: set exitCode and let the runtime exit
+    // naturally so buffered stderr bytes are flushed before termination.
+    process.exitCode = 1;
   });
 
   // Forward SIGINT/SIGTERM to the entire child tree so a Ctrl-C in the
@@ -176,12 +178,32 @@ function executeCommand(command: string): void {
       process.exit(0);
     }
 
-    // Flush any partial lines and emit trailing newlines.
+    // Flush any partial lines and emit trailing newlines. These writes go
+    // into Node's internal stdout/stderr buffers and are drained to the OS
+    // asynchronously by libuv.
     stdoutTransformer.end();
     stderrTransformer.end();
 
-    // Preserve exit code from child process
-    process.exit(code ?? 1);
+    // Do NOT call process.exit(): it is synchronous and does not wait for
+    // buffered pipe writes to drain. Under load (e.g. ~1 MB of prior
+    // output), the final bytes — including the trailing newline written
+    // by stdoutTransformer.end() — can still be in Node's internal write
+    // buffer or libuv's write queue at the moment of exit and would be
+    // dropped, producing silently truncated output (observed as an
+    // intermittent "expected trailing newline" failure in the 1 MB
+    // streaming test on slow CI runners, and reproducible in the wild as
+    // `fullcontext big-cmd > file.txt` producing a file missing its last
+    // bytes).
+    //
+    // Setting process.exitCode and returning lets the runtime exit
+    // naturally once every pending stdout/stderr write has been accepted
+    // by the OS. Pending libuv write requests are tracked as active
+    // requests on the stdio handles and keep the event loop alive; the
+    // SIGINT/SIGTERM listeners registered via process.on() are backed by
+    // unref'd uv_signal_t handles and do not hold the loop open. This is
+    // the pattern Node's own docs prescribe for this exact class of bug
+    // (see https://nodejs.org/api/process.html#processexit ).
+    process.exitCode = code ?? 1;
   });
 }
 

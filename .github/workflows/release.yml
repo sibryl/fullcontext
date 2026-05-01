@@ -34,15 +34,19 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - name: Upgrade npm (required for OIDC trusted publishing)
+      - name: Activate npm 11 via corepack (required for OIDC trusted publishing)
         # OIDC trusted publishing requires npm >= 11.5.1. Node 22 ships with
         # npm 10.x, which falls back to traditional auth and fails with
-        # ENEEDAUTH. We pin to npm@11 (major range) rather than @latest to
-        # avoid a MODULE_NOT_FOUND bug in the bundled npm's self-upgrade
-        # path when targeting @latest. If this ever breaks, a corepack-based
-        # fallback (`corepack prepare npm@latest --activate`) is the next
-        # option to try.
-        run: npm install -g npm@11
+        # ENEEDAUTH. The bundled npm 10.x on the runner is corrupted — any
+        # `npm install -g npm@*` hits MODULE_NOT_FOUND for promise-retry.
+        # corepack is a Node built-in (since 16.9) that downloads package
+        # managers from scratch, bypassing the corrupt bundled npm entirely.
+        # Pinned to 11.5.1 (first version with OIDC trusted publishing
+        # support) for deterministic behavior.
+        run: |
+          corepack enable
+          corepack prepare npm@11.5.1 --activate
+          npm --version
 
       # ── Test gate ─────────────────────────────────────────────────────
       # Install, build, and test BEFORE any mutating action (version bump,

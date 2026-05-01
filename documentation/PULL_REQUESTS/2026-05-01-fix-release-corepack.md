@@ -1,3 +1,5 @@
+> **⚠️ Superseded:** The corepack-based approach described here was reverted. The real root cause was unrelated — the npm Trusted Publisher was registered against the old workflow filename `publish.yml`, but the workflow had been renamed to `release.yml`. See [`2026-05-01-fix-release-node20.md`](./2026-05-01-fix-release-node20.md) for the fix that actually worked. Preserved for historical context.
+
 ## Problem
 
 Our release pipeline is currently unable to publish new versions to npm. The step that upgrades the installed `npm` to a version new enough to use our secure authentication method fails with an internal error — not because the target version is wrong, but because the copy of `npm` preinstalled on our build server has corrupted dependencies and cannot install anything, including itself.

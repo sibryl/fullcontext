@@ -1,4 +1,4 @@
-name: Release
+name: Publish
 
 on:
   workflow_dispatch:
@@ -31,21 +31,15 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
           cache: npm
 
-      - name: Activate npm 11 via corepack (required for OIDC trusted publishing)
-        # OIDC trusted publishing requires npm >= 11.5.1. Node 22 ships with
-        # npm 10.x, which falls back to traditional auth and fails with
-        # ENEEDAUTH. The bundled npm 10.x on the runner is corrupted — any
-        # `npm install -g npm@*` hits MODULE_NOT_FOUND for promise-retry.
-        # corepack is a Node built-in (since 16.9) that downloads package
-        # managers from scratch, bypassing the corrupt bundled npm entirely.
-        # Pinned to 11.5.1 (first version with OIDC trusted publishing
-        # support) for deterministic behavior.
+      - name: Upgrade npm (required for OIDC trusted publishing)
+        # OIDC trusted publishing requires npm >= 11.5.1. Node 20 ships with
+        # an older bundled npm but can cleanly upgrade it via `npm install -g`.
+        # This approach worked reliably on v1.0.5 (March 12) and earlier releases.
         run: |
-          corepack enable
-          corepack prepare npm@11.5.1 --activate
+          npm install -g npm@latest
           npm --version
 
       # ── Test gate ─────────────────────────────────────────────────────

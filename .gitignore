@@ -24,3 +24,6 @@ Thumbs.db
 
 # OpenCode
 .opencode/
+
+# JENA working directory
+.jena/

@@ -214,7 +214,12 @@ function main(): void {
   // Display usage if no arguments provided or help requested
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     console.log(USAGE);
-    process.exit(0);
+    // Set exitCode + return rather than process.exit(): when stdout is a
+    // pipe (e.g. `fullcontext --help | head`), synchronous process.exit
+    // can drop buffered writes before libuv has flushed them to the OS.
+    // See the matching pattern in executeCommand's 'close' handler.
+    process.exitCode = 0;
+    return;
   }
 
   // Join all arguments into a single command string for shell execution

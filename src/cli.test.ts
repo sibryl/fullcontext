@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import * as path from 'node:path';
+import type { Readable } from 'node:stream';
 
 const CLI = path.resolve(__dirname, 'index.js');
 
@@ -18,6 +20,26 @@ function runCli(command: string) {
     stderr: result.stderr,
     status: result.status,
   };
+}
+
+/**
+ * Collect every byte emitted by a Readable stream and return the concatenated
+ * Buffer. Attaches a 'data' listener synchronously, then awaits the 'end'
+ * event so the returned Buffer is guaranteed to contain every chunk the
+ * stream ever emits.
+ *
+ * Prefer this over `Buffer.concat(chunks)` gated on `child.on('close')`:
+ * 'close' on the child process can fire while the parent-side Readable still
+ * has queued 'data' events, which causes intermittent truncation under load.
+ * 'end' fires only after the last 'data' event has been dispatched.
+ */
+async function collectStream(stream: Readable): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  stream.on('data', (chunk: Buffer) => {
+    chunks.push(chunk);
+  });
+  await once(stream, 'end');
+  return Buffer.concat(chunks);
 }
 
 test('transforms multi-line stdout into single line', () => {
@@ -70,11 +92,14 @@ test('streams stdout incrementally', async () => {
   const exitTime = new Promise<number>((resolve) => {
     child.on('close', () => resolve(Date.now()));
   });
+  // collectStream awaits 'end', so the returned Buffer contains every chunk.
+  const outputPromise = collectStream(child.stdout);
 
-  const chunks: Buffer[] = [];
-  child.stdout.on('data', (c) => chunks.push(c));
-
-  const [t1, t2] = await Promise.all([firstChunkTime, exitTime]);
+  const [t1, t2, outputBuf] = await Promise.all([
+    firstChunkTime,
+    exitTime,
+    outputPromise,
+  ]);
 
   // The first chunk must arrive meaningfully before exit.
   // Use a 200ms margin to be robust on slow CI.
@@ -84,8 +109,7 @@ test('streams stdout incrementally', async () => {
   );
 
   // Final bytes unchanged from the batch implementation
-  const final = Buffer.concat(chunks).toString('utf8');
-  assert.equal(final, '[1] one [2] two\n');
+  assert.equal(outputBuf.toString('utf8'), '[1] one [2] two\n');
 });
 
 test('streams stderr incrementally and independently from stdout', async () => {
@@ -95,15 +119,16 @@ test('streams stderr incrementally and independently from stdout', async () => {
     { stdio: ['ignore', 'pipe', 'pipe'] },
   );
 
-  const outChunks: Buffer[] = [];
-  const errChunks: Buffer[] = [];
-  child.stdout.on('data', (c) => outChunks.push(c));
-  child.stderr.on('data', (c) => errChunks.push(c));
+  // Collect both streams to their 'end' event to guarantee no queued
+  // 'data' chunks are missed when the child closes.
+  const [outBuf, errBuf] = await Promise.all([
+    collectStream(child.stdout),
+    collectStream(child.stderr),
+  ]);
+  await once(child, 'close');
 
-  await new Promise((resolve) => child.on('close', resolve));
-
-  assert.equal(Buffer.concat(outChunks).toString('utf8'), '[1] out\n');
-  assert.equal(Buffer.concat(errChunks).toString('utf8'), '[1] err\n');
+  assert.equal(outBuf.toString('utf8'), '[1] out\n');
+  assert.equal(errBuf.toString('utf8'), '[1] err\n');
 });
 
 test('exits cleanly when downstream pipe closes early (EPIPE)', async () => {
@@ -264,16 +289,18 @@ test('streams ~1 MB of output without loss or corruption', async () => {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  const chunks: Buffer[] = [];
-  child.stdout.on('data', (c: Buffer) => chunks.push(c));
-
-  const exit = await new Promise<number | null>((resolve) => {
-    child.on('close', (code) => resolve(code));
-  });
+  // Collect stdout and wait for the child to close in parallel. collectStream
+  // awaits the stream's 'end' event, which fires only after every 'data'
+  // event has been dispatched — eliminating the close-vs-data race that
+  // caused intermittent missing-trailing-newline failures on CI.
+  const [outputBuf, [exit]] = await Promise.all([
+    collectStream(child.stdout),
+    once(child, 'close') as Promise<[number | null]>,
+  ]);
 
   assert.equal(exit, 0, 'expected clean exit');
 
-  const output = Buffer.concat(chunks).toString('utf8');
+  const output = outputBuf.toString('utf8');
 
   // Starts with the first line marker and no leading space.
   assert.ok(
@@ -285,12 +312,7 @@ test('streams ~1 MB of output without loss or corruption', async () => {
   assert.ok(output.endsWith('\n'), 'expected trailing newline');
   assert.ok(!output.endsWith('\n\n'), 'expected exactly one trailing newline');
 
-  // Line-marker count equals LINE_COUNT. Each marker is `[N] ` where N is
-  // the 1-based index. The number of markers is the number of matches of
-  // the `\[\d+\] ` pattern minus the leading one (which has no space prefix)
-  // — actually, the count of ` \[\d+\] ` (leading-space form) plus 1 for the
-  // first marker. Simpler: count `] ` occurrences where the preceding chars
-  // look like `[N`.
+  // Line-marker count equals LINE_COUNT.
   const markerMatches = output.match(/\[\d+\] /g) ?? [];
   assert.equal(
     markerMatches.length,
